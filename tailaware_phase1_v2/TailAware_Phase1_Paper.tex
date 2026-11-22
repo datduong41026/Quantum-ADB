@@ -1,0 +1,336 @@
+\documentclass[10pt,conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm,booktabs,array,multirow,graphicx,url,subcaption,balance,mathtools}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{cite}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+\definecolor{darkblue}{RGB}{22,55,79}
+\renewcommand{\arraystretch}{1.12}
+\newcommand{\Prb}{\mathbb{P}}
+\newcommand{\EE}{\mathbb{E}}
+\newcommand{\rrmse}{\mathrm{rRMSE}}
+\newcommand{\kg}{\mathrm{KGZ}}
+\newcommand{\tj}{\mathrm{TJK}}
+\newcommand{\mUSD}{\,\mathrm{million\ USD}}
+\begin{document}
+\twocolumn[{\begin{@twocolumnfalse}
+\begin{center}
+{\fontsize{19}{22}\selectfont\bfseries Tail-Aware Tensor-Guided Estimation of Rare Joint Catastrophe-Bond Losses: A Reproducible Phase-1 Study\par}
+\vspace{7pt}
+{\small \textsc{ADB Quantum Innovation Challenge} \quad | \quad Phase 1 Scientific Proposal and Validated Prototype}
+\end{center}
+\vspace{2pt}
+\noindent\textbf{Abstract---}Reliable estimation of simultaneous sovereign catastrophe-bond exhaustion is limited by rare-event sampling error. We evaluate a tail-aware, tensor-guided importance sampler on the Asian Development Bank (ADB) benchmark for the Kyrgyz Republic and Tajikistan. Unlike an earlier disconnected compression pilot, the present pipeline uses a nonnegative rank-four truncated singular-value decomposition of the annual 100-state joint law to construct approximate backward tail probabilities; these probabilities direct a sequential proposal with exact likelihood-ratio correction. Across all five ADB scenarios, 200 independent replications at 32,768 three-year paths each show relative root-mean-square error (rRMSE) of 0.19--0.24\% for both-bonds-exhausted probability, versus 12.78--36.85\% for the specified ADB loss-tilted importance-sampling comparator. Paired bootstrap intervals for the RMSE ratio lie entirely below one. Monte Carlo, eight-scramble Sobol, and first-attachment stratification were evaluated at the same path budget. We also implement an eight-qubit, controlled-rotation statevector oracle, verify forward/inverse preparation and Grover amplitudes, and simulate 200 independent ideal maximum-likelihood amplitude-estimation experiments. Those QAE experiments \emph{do not} outperform the tensor-guided classical proposal at the tested cost. The strong classical variance reduction relies on precomputation over a small model that is already exactly tractable; it therefore supports a falsifiable Phase-2 research strategy, \emph{not} a claim of quantum advantage.\par
+\vspace{5pt}
+\noindent\textbf{Index Terms---}catastrophe bonds; joint-tail dependence; rare-event estimation; importance sampling; low-rank tensor models; quantum amplitude estimation; reproducible benchmark.\par
+\vspace{12pt}
+\end{@twocolumnfalse}}]
+
+\section{Introduction}
+The ADB challenge asks whether quantum or quantum-inspired methods can accurately estimate multi-country catastrophe losses and payout risk, and whether they can scale beyond small portfolios \cite{adb}. The concrete test case has two \$80 million disaster-relief bonds, each with \$70 million of earthquake coverage and \$10 million of extreme-precipitation coverage over three years. Dependence matters because the event that both contracts exhaust is far rarer than ordinary attachment. The ADB base-case reference is approximately $3.16\times10^{-5}$ per three-year term.
+
+For a Bernoulli target with probability $p$, naive Monte Carlo (MC) requires $O((p\varepsilon^2)^{-1})$ paths for relative error $\varepsilon$. Classical variance reduction is thus an essential comparator before considering quantum amplitude estimation (QAE) \cite{glasserman,brassard,montanaro}. We make three distinctions throughout: \emph{(i)} model error in the joint distribution, \emph{(ii)} numerical estimator error conditional on a fixed distribution, and \emph{(iii)} cost of classical or coherent quantum operations. Confusing these leads to misleading speedup claims.
+
+\textbf{Phase-1 contributions:} (1) a five-scenario, six-method study with 200 replications and paired bootstrap uncertainty; (2) an implemented low-rank-tensor-to-sampler pathway rather than separate SVD and sampling demonstrations; (3) an explicit controlled-rotation coherent oracle plus an ideal shot-based maximum-likelihood amplitude-estimation (MLAE) experiment; and (4) a resource-gated Phase-2 plan acknowledging that exact classical conditioning is the strongest baseline on this small common-shock model.
+
+\section{Problem Formulation and ADB Data}
+\subsection{Contract model and reference values}
+Let $X_y=(a_y,b_y,r_{1y},r_{2y})$ denote the annual state, where $a_y,b_y\in\{0,\ldots,4\}$ are capped earthquake quarter steps and $r_{iy}\in\{0,1\}$ are precipitation indicators. A year has $5\cdot5\cdot2\cdot2=100$ possible states. Three independent annual states aggregate with elementwise caps $(4,4,1,1)$, producing term state $S_3$. In the base contract, the two losses in millions of dollars are
+\begin{equation}
+L_1=17.5a+10r_1,\qquad L_2=17.5b+10r_2,
+\label{eq:contract}
+\end{equation}
+with $L=L_1+L_2$. The rain-cover scenario changes these to $15a+20r_1$ and $15b+20r_2$.
+
+The benchmark supplies each country's four annual earthquake payout-exceedance probabilities (Kyrgyz: 3.883, 2.331, 1.790, 1.184\%; Tajik: 3.925, 1.743, 1.332, 1.043\%), two conditional cross-country trigger probabilities (7.5\% and 7.4\%), and annual precipitation trigger probability $q=2\%$ per country. Following the brief \cite{adb}, a compound-Poisson earthquake construction and correlated precipitation model yield the annual law $p(x)$. A $25\times25$ continuous-time Markov generator provides the earthquake component; the precipitation component yields four trigger outcomes.
+
+The required five outputs are
+\begin{align}
+\mu_1&=\EE[L], & \mu_2&=\Prb(L_1>0,L_2>0),\nonumber\\
+\mu_3&=\Prb(L>80), & \mu_4&=\EE[(L-80)_+],\nonumber\\
+\mu_5&=\Prb(L_1=80,L_2=80). \label{eq:targets}
+\end{align}
+Amounts in $\mu_1,\mu_4$ are in millions of USD unless otherwise noted. Reference values are obtained by three capped convolutions of $p$, not learned from an external catastrophe dataset. Consequently, \emph{no USGS/NASA observations are added to the official benchmark}. The new simulation uses precisely the fixed ADB probability law, not synthetic events introduced into the benchmark.
+
+\begin{table}[t]
+\centering
+\caption{Benchmark checks against published ADB targets.}
+\label{tab:exact}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Scenario & $\EE[L]$ (\$m) & $\Prb(L>80)$ & $\Prb(\mathrm{all\ exh.})$ \\
+\midrule
+Base & 10.0635 & 1.2047\% & 0.003163\% \\
+Independent & 10.0635 & 0.7186\% & 0.000392\% \\
+Common shock & 10.0635 & 1.6066\% & 0.004400\% \\
+Rain stress & 11.1705 & 1.3215\% & 0.006925\% \\
+Rain cover & 9.9701 & 0.6997\% & 0.003163\% \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\parbox{\columnwidth}{\footnotesize Values are generated by the exact model implementation and agree with the published table to reported precision. The full 25-cell reference audit is included in the accompanying CSV.}
+\end{table}
+
+\subsection{Evaluation protocol and scientific controls}
+The same annual law, three-year horizon, five target functions, and exact reference are used across all estimators. For each scenario, 200 independent outer replications are run for each method with a budget of 32,768 term paths. An ADB-style scrambled Sobol comparator uses eight independent scrambles of $2^{12}$ three-dimensional points \emph{per replication}. We report
+\begin{equation}
+\rrmse=\frac{\sqrt{R^{-1}\sum_{r=1}^{R}(\hat\mu_r-\mu)^2}}{|\mu|},\quad R=200.
+\label{eq:rmse}
+\end{equation}
+We independently bootstrap matched replicate IDs 3,000 times to estimate 95\% percentile intervals for the ratio of each method's RMSE to ADB importance sampling (IS). A matched ID is not a shared random path, so the bootstrap captures finite-replication uncertainty but not all possible paired-covariance benefits. No test outputs are used to tune the SVD rank or mixture weights in these runs.
+
+\section{Methods: Strong Classical and Tensor-Guided Comparators}
+\subsection{Classical controls}
+\emph{MC} inverts the annual 100-state cumulative distribution for three independent uniforms. \emph{ADB IS} proposes in each year $q_{\rm ADB}(x)=\frac12 p(x)+\frac12p(x)\ell(x)/\EE_p[\ell(X)]$, with $\ell$ the annual payout, and uses exact likelihood ratios. \emph{Stratification} conditions on the first year with a nonzero payout and weights the three strata by $p_0^{k-1}(1-p_0)$, where $p_0$ denotes the annual no-payout probability. \emph{Scrambled Sobol} maps randomized low-discrepancy points through the same annual inverse CDF \cite{owen}. The prior heuristic tail-IS proposal biases each year's distribution toward cross-country losses but does not condition on the remaining horizon. None of these methods assumes additional hazard observations.
+
+\subsection{Integrated tail-aware tensor proposal}
+The annual joint PMF, reordered as a $10\times10$ country-by-country matrix $P$, is approximately factorized by truncated SVD:
+\begin{equation}
+P\approx U_r\Sigma_rV_r^{\top},\qquad r=4.
+\end{equation}
+Negative entries are clipped to zero and the resulting approximate PMF $\tilde p$ renormalized; the nonlinear projection means the final nonnegative matrix need not have exact rank four. The key improvement is that $\tilde p$ now drives a \emph{conditional estimator}, rather than being evaluated as a stand-alone compressed distribution.
+
+Let $s\oplus x$ mean capped state addition and $g(s)=\mathbb{1}\{L_1(s)=L_2(s)=80\}$ be the rare-event indicator. Construct approximate lookahead potentials
+\begin{align}
+H_0(s)&=g(s),\nonumber\\
+H_{h+1}(s)&=\sum_{x}\tilde p(x)H_h(s\oplus x),\quad h=0,1.\label{eq:backward}
+\end{align}
+At year $t$, with state $s$ before the draw and $h=3-t$ remaining years afterward, define $v_{t,s}(x)=H_h(s\oplus x)$ and $Z_{t,s}=\sum_xp(x)v_{t,s}(x)$. For $Z_{t,s}>0$, the proposal is
+\begin{align}
+q_t(x\mid s)&=(1-\alpha)p(x)+\alpha\,\frac{p(x)[v_{t,s}(x)+\delta Z_{t,s}]}{(1+\delta)Z_{t,s}},\label{eq:proposal}
+\end{align}
+with fixed $\alpha=0.9$ and $\delta=0.02$; when $Z_{t,s}=0$, set $q_t=p$. The mixture retains support because $q_t(x\mid s)\geq0.1p(x)$. Each sampled path returns
+\begin{equation}
+\hat \mu_5=\frac1N\sum_{i=1}^N g(S^{(i)}_3)
+\prod_{t=1}^{3}\frac{p(X^{(i)}_t)}{q_t(X^{(i)}_t\mid S^{(i)}_{t-1})}.
+\label{eq:is}
+\end{equation}
+Equation (\ref{eq:is}) is unbiased for the \emph{original} ADB probability, conditional on exact $p$ and finite simulation, regardless of SVD approximation error; $\tilde p$ only informs the proposal. If the compressed PMF were used for direct risk evaluation without correction, its extreme-tail bias could be material.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_tensor_rank.pdf}
+\caption{In the base scenario, direct substitution of an SVD-compressed PMF can produce significant relative tail bias at low ranks. Tensor-guided IS instead maintains exact likelihood-ratio correction. Its theoretical RMSE uses the finite-state second-moment recursion and $N=32{,}768$.}
+\label{fig:rank}
+\end{figure}
+
+\subsection{A caveat that determines scalability}
+The backward potentials in (\ref{eq:backward}) are precomputed over all 100 benchmark states, taking approximately 0.3 ms on the reference CPU after the annual law is given. This is a legitimate small-state demonstration of conditional rare-event simulation, \emph{not} a scalable advantage: with known transition probabilities, the same backward dynamic program nearly solves the rare-event target exactly. Indeed, direct classical exact evaluation of all five targets takes approximately 0.75 ms per base-case call in our environment. The Phase-2 research question is whether a \emph{compact, reusable} tensor representation of $H_h$ can avoid exponential state enumeration when multi-country event footprints destroy low-dimensional factorization. For the present two-country challenge benchmark, exact enumeration remains the best end-to-end computation.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=.96\textwidth]{fig_pipeline.pdf}
+\caption{Implemented tensor-guided prototype. The approximate PMF and its backward lookahead guide sequential proposals; the final estimator uses exact ADB likelihood ratios. The coherent-oracle experiment uses a separate, fixed-term distribution and is deliberately not claimed to accelerate this pipeline.}
+\label{fig:flow}
+\end{figure*}
+
+\section{Coherent Oracle and QAE Prototype}
+\subsection{Executable controlled-rotation oracle}
+The exact 100-state \emph{term} distribution is zero-padded into 128 basis states on seven data qubits. Using a binary probability tree, a sequence of 99 nonzero, prefix-controlled $R_y$ rotations prepares $\sum_x\sqrt{p_{\rm term}(x)}|x\rangle$. An eighth qubit marks a target event, or uses a controlled $R_y$ to encode a bounded payoff. For normalized $f(x)\in[0,1]$, the ideal oracle $A$ prepares
+\begin{equation}
+A|0^8\rangle=\sum_x\sqrt{p_{\rm term}(x)}|x\rangle\Big(\sqrt{1-f(x)}|0\rangle+\sqrt{f(x)}|1\rangle\Big).
+\label{eq:oracle}
+\end{equation}
+The implementation applies the controlled rotations explicitly to an eight-qubit NumPy statevector; it also applies their reversed, sign-inverted sequence for $A^\dagger$. Define $S_\chi$ as an objective-qubit phase flip and $S_0$ as the computational-zero reflection. The Grover iterate is $Q=AS_0A^\dagger S_\chi$, whose marked-state probability after $k$ iterates should be $\sin^2((2k+1)\arcsin\sqrt{\mu})$.
+
+For three binary ADB targets (both pay, portfolio loss above \$80 m, both bonds exhausted) in the base and independent scenarios, the maximum objective-amplitude error is below $4\times10^{-17}$, the inversion error below $4\times10^{-16}$, and the maximum checked Grover probability deviation below $2.2\times10^{-15}$ for powers up to 16. These are noiseless \emph{statevector} checks, not quantum-device measurements or native CNOT decompositions.
+
+\subsection{Shot-based maximum-likelihood amplitude estimation}
+A separate ideal noiseless MLAE experiment simulates projective shots from these validated Grover response probabilities at powers $k\in\{0,1,2,4,8,16,32,64,128\}$, using 96 shots per power: $49{,}824$ state-preparation or inverse-equivalent calls per repetition. The likelihood is maximized over a preregistered rare-probability interval $[0,10^{-3}]$, not over an amplitude interval selected after inspecting the observed outcomes. We simulate 200 independent repetitions per scenario, and use a grid search followed by bounded scalar refinement. The largest powers are evaluated from the verified analytical Grover law rather than by transpiling deep physical circuits. This distinction is essential when interpreting resource claims \cite{grinko,brassard}.
+
+\section{Experimental Results}
+\subsection{Six-way matched-budget comparison}
+\begin{table*}[t]
+\centering
+\caption{Relative RMSE (\%) for the ADB both-bonds-exhausted target. Lower is better. Each method has 200 independently seeded runs with 32,768 three-year paths per run. Tensor-guided IS is target-specific.}
+\label{tab:rare}
+\small
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ADB scenario & Monte Carlo & Scrambled Sobol & Stratified & ADB IS & Heuristic tail-IS & \textbf{Tensor-guided IS} \\
+\midrule
+Base & 107.32 & 100.07 & 51.16 & 20.66 & 14.99 & \textbf{0.20} \\
+Independent & 232.90 & 295.38 & 149.84 & 36.85 & 40.53 & \textbf{0.24} \\
+Common shock & 92.31 & 85.46 & 42.77 & 17.22 & 12.72 & \textbf{0.20} \\
+Rain stress & 59.00 & 65.96 & 39.38 & 12.78 & 10.04 & \textbf{0.21} \\
+Rain cover & 94.15 & 96.47 & 52.32 & 16.72 & 12.56 & \textbf{0.19} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=.97\textwidth]{fig_rmse_all.pdf}
+\caption{Rare-event rRMSE on a logarithmic scale for all six estimators and all five ADB scenarios. All classical samplers receive an equal term-path budget; proposal preparation and oracle costs are analyzed separately. In particular, an extremely accurate conditional proposal on a small exactly solvable state space does not establish computational advantage.}
+\label{fig:rmse}
+\end{figure*}
+
+Table~\ref{tab:rare} shows that the conditional tensor-guided proposal sharply lowers variance for the targeted exhaustion event, including in the independent scenario where the original heuristic tail tilt was unstable. The same result is confirmed by a finite-state second-moment recursion for the IS estimator, not solely by observed replicates. Bootstrap uncertainty on the improvement ratio is reported in Table~\ref{tab:ci}. This inference is conditioned on the specified ADB model and fixed design; it is not an out-of-sample test of catastrophe-risk modeling.
+
+\begin{table}[t]
+\centering
+\caption{RMSE ratio of tensor-guided IS to ADB IS, with paired 95\% percentile bootstrap interval (3,000 resamples).}
+\label{tab:ci}
+\scriptsize
+\setlength{\tabcolsep}{3.1pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Scenario & Ratio & 95\% interval \\
+\midrule
+Base & 0.0097 & [0.0084, 0.0112] \\
+Independent & 0.0066 & [0.0056, 0.0080] \\
+Common shock & 0.0117 & [0.0099, 0.0137] \\
+Rain stress & 0.0167 & [0.0146, 0.0191] \\
+Rain cover & 0.0111 & [0.0093, 0.0135] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_bootstrap_ratio.pdf}
+\caption{Uncertainty on the tensor-guided-to-ADB-IS RMSE ratio. The dashed line is equal performance. Intervals quantify \emph{finite-replication variability}, not uncertainty in the real catastrophe-loss model.}
+\label{fig:ci}
+\end{figure}
+
+\subsection{Target specificity and unfavorable results}
+A proposal tailored to the all-exhausted event \emph{does not} automatically perform well on other financial targets. In the base case, tensor-guided IS produces 12.52\% rRMSE for both-countries-pay and 23.98\% for portfolio loss above \$80 m; the ADB IS comparator obtains 1.85\% and 1.95\%, respectively. Conversely, the earlier heuristic tail-IS proposal gives 1.44\% and 1.67\% on those two targets while providing 14.99\% on exhaustion. The correct model-selection decision is to route different payoffs to appropriate estimators (or use a multi-objective proposal), not to declare the tensor-guided sampler universally superior. Future experiments must penalize setup overhead and all five targets simultaneously.
+
+The compression study also reveals why exact likelihood reweighting matters. On the base scenario, direct evaluation of the compressed rank-three PMF incurs about 14.57\% relative bias in exhaustion probability despite a small matrix approximation error; rank four reduces this direct risk bias to roughly 0.136\%. The proposed importance-weighted estimator retains the original target even when the approximate lookahead is imperfect. For the independent scenario the annual joint distribution factorizes, making SVD-based compression already trivial; its observed gains reflect adaptive conditioning, not sophisticated tensor representation.
+
+\subsection{Oracle validation and ideal QAE comparison}
+\begin{table}[t]
+\centering
+\caption{Executable coherent-oracle and ideal MLAE pilot, 200 simulated repetitions of 96 shots at nine powers.}
+\label{tab:quantum}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Metric & Base & Independent \\
+\midrule
+True exhaustion $p$ & $3.16\cdot10^{-5}$ & $3.92\cdot10^{-6}$ \\
+Preparation amp. error & $2.1\cdot10^{-20}$ & $2.6\cdot10^{-21}$ \\
+MLAE oracle calls & 49,824 & 49,824 \\
+MLAE relative RMSE & 12.43\% & 17.57\% \\
+Tensor-guided rRMSE & 0.20\% & 0.24\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_qae_comparison.pdf}
+\caption{The ideal MLAE demonstration is a working oracle-estimation test, but is not competitive with the target-guided classical conditional proposal at these incomparable query/path budgets. Full native-gate costs would make MLAE still more expensive.}
+\label{fig:qae}
+\end{figure}
+
+The MLAE simulation \emph{does} provide an implemented likelihood-based estimation stage rather than a theoretical $O(1/\epsilon)$ statement. Nonetheless, 49,824 coherent calls are not comparable to 49,824 simple classical paths in gate time; the largest Grover powers imply long controlled circuits. The reported eight-qubit operations are multi-controlled gates, with no decomposition to a specific quantum SDK or hardware-native two-qubit gate set, and there is no error mitigation or noisy-device execution. We therefore make no practical quantum-speedup claim.
+
+\section{Phase-1 Resource Estimation and Go/No-Go Gates}
+\begin{table}[t]
+\centering
+\caption{Observed versus outstanding quantum resources.}
+\label{tab:resources}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{.40\columnwidth}p{.51\columnwidth}@{}}
+\toprule
+Resource & Current status \\
+\midrule
+State register & 7 qubits (128 slots; 100 valid) \\
+Objective marker & 1 qubit; 8 total in simulator \\
+Preparation gates & 99 nonzero multicon-trolled $R_y$ operations \\
+Exhaustion marker & 1 seven-control objective rotation \\
+Grover validation & Powers 0, 1, 2, 4, 8, 16 \\
+MLAE search & 9 powers, $k_{\max}=128$ \\
+MLAE coherent calls & 49,824 per replication \\
+Native CNOT / T count & \textbf{Pending} decomposition and transpilation \\
+Noise, depth, hardware & \textbf{Pending} SDK and device experiment \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the classical CPU, a single 32,768-path run takes approximately 7--10 ms for the sampling implementations, excluding probability-law construction, validation, and cross-method Python overhead. Median tensor-proposal setup is about 0.3 ms. An exact two-country CTMC and convolution reference can be evaluated in about 0.75 ms on this environment. The apparent per-path RMSE gain therefore does \emph{not} beat the exact solution in end-to-end time on this task.
+
+A legitimate future quantum break-even requires the product of coherent calls and \emph{fully decomposed} oracle cost, plus training/loading and error-correction overhead, to be smaller than the best classical end-to-end alternative \cite{chakrabarti}. Our proposal accepts a negative quantum result if no such regime is found. Another required benchmark is an exact factor-conditioned classical algorithm: low-dimensional common shocks can yield polynomial scaling without quantum hardware. A more defensible use case requires overlapping, heterogeneous event footprints or higher-treewidth dependence where this simplification breaks down.
+
+\section{Phase-2 Work Plan, Evaluation and Risk Controls}
+\begin{table*}[t]
+\centering
+\caption{Decision-gated Phase-2 plan. Every gate has a falsifiable acceptance criterion.}
+\label{tab:plan}
+\small
+\setlength{\tabcolsep}{7pt}
+\begin{tabular}{@{}lp{.37\textwidth}p{.43\textwidth}@{}}
+\toprule
+Weeks & Implementation and evaluation & Exit criterion \\
+\midrule
+1--2 & Freeze five ADB targets, 200+ replicate seeds and data definitions; implement factor-conditioned exact classical baseline. & No reference mismatch; report exact time, memory and complete likelihood-ratio cost. \\
+3--4 & Factorize backward potentials by low-rank tensor train / matrix-product representation; vary ranks 2--16. & Low-rank computation demonstrably avoids constructing full $10^n$ state grids on $n>2$ stress tests. \\
+5--6 & Evaluate all-target mixtures and payoff-specific adaptive proposals against MC, Sobol, Stratified, ADB IS, and classical conditional DP. & Paired confidence intervals and end-to-end CPU time reported for every target and scenario. \\
+7--8 & Build $n=3,5,8$ heterogeneous-event-set synthetic portfolios; vary common-shock and cross-hazard structure. & Show a hard regime \emph{not} reducible to the original one-factor exact solver; no validation-data leakage. \\
+9--10 & Port coherent oracle to Qiskit/CUDA-Q or equivalent, decompose multi-controls; run iterative or maximum-likelihood QAE with device noise. & Native two-qubit gate counts, depth, shot/error tradeoff and classical break-even inequality quantified. \\
+11--12 & Independent reruns, robustness analysis, Phase-2 report, code, demo and decision memo. & Publish positive results \emph{or} a negative quantum-advantage outcome with reproducible evidence. \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Acceptance matrix for Phase 1}
+\begin{table}[t]
+\centering
+\caption{Corrective-action audit requested for this revision.}
+\label{tab:accept}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}p{.63\columnwidth}l@{}}
+\toprule
+Acceptance item & Result \\
+\midrule
+200 independent replications, 95\% RMSE-ratio CIs & PASS \\
+Sobol and Stratified under same pilot budget & PASS \\
+SVD integrated into an unbiased rare-event pipeline & PASS \\
+Explicit coherent oracle, inverse and Grover check & PASS (ideal) \\
+Ideal likelihood-based QAE sampling prototype & PASS (ideal) \\
+Native-device/transpiled quantum circuit benchmark & PENDING \\
+Scalability beyond exact classical conditional DP & PENDING \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Threats to Validity and Competitive Positioning}
+\textbf{Precomputation versus per-query fairness.} Using a finite-state backward potential can yield near-conditional, low-variance importance sampling; in the ADB two-country model that potential can be computed as cheaply as the exact answer. This limits the meaning of our very small RMSE at a fixed path count. A genuinely competitive submission must report both numerical accuracy and end-to-end amortized work under repeated queries and larger portfolios.
+
+\textbf{Learning versus estimating.} The original ADB annual law is given analytically. Our rank-four SVD is a compressed surrogate to aid sampling, \emph{not} evidence that rare cross-border dependence can be learned from a few decades of disaster data. External datasets, if introduced in Phase 2 for realism, will be evaluated in a separate transfer benchmark and will not modify ADB's exact reference cases.
+
+\textbf{Statistical selection.} The new 200-replication experiment strengthens confidence relative to the previous 24-replication pilot and tests Sobol/Stratified, but the proposal family was developed after inspecting earlier pilot behavior. Bootstrap intervals quantify estimation error within this benchmark, not independent out-of-distribution superiority. Prospective rank/mixture sweeps must use validation-only selection and new held-out synthetic scenarios.
+
+\textbf{Quantum implementation.} Our simulator executes a coherent oracle made of ideal, high-control rotations, checks $A^\dagger$ and Grover behavior, and executes a \emph{shot-model} MLAE estimator. It does not yet provide a gate-decomposed QAE application on noisy quantum hardware, nor demonstrate that the loader's cost can be amortized. The correct claim is \emph{prototype feasibility and exact statevector consistency}, not quantum advantage.
+
+\textbf{Research position.} The testable novelty is a \emph{tail-calibrated tensor surrogate for conditional importance proposals and potentially coherent loaders in more complex, non-factorizable catastrophe dependence graphs}. The threshold for novelty is not a low RMSE on a 100-state known model; it is a repeatable improvement after strong classical exact conditioning, Sobol, and importance-sampling alternatives are accounted for \cite{glasserman,han}.
+
+\section{Conclusion}
+This phase-1 revision closes four practical gaps in the earlier pilot: stronger replication/uncertainty analysis, all ADB sampling baselines, an integrated tensor-guided rare-event estimator, and an executable ideal coherent-oracle/MLAE demonstration. The tensor-guided approach is highly accurate for the targeted both-bonds-exhausted probability across the five official scenarios, but less accurate on non-target payoffs; the ideal MLAE prototype remains less competitive than this specialized classical estimator. Because the small benchmark is already exactly tractable, \emph{the next scientifically decisive result is not a larger nominal query ratio but a resource-complete, held-out demonstration on genuinely complex event-set dependence}. The proposed phase-2 decision gates make that conclusion falsifiable.
+
+\section*{Reproducibility and Data Availability}
+The accompanying package provides exact-reference checks, fixed-seed Python experiments, 200-replicate outputs, 3,000-resample bootstrap summaries, rank and cost diagnostics, explicitly controlled statevector-oracle checks, MLAE shot-model outputs, figures, and this \LaTeX{} source. Software: Python 3, NumPy, SciPy, pandas, and Matplotlib; there are no inaccessible ADB disaster records or added external hazard observations in the official benchmark runs. Execution was performed on a CPU; exact hardware timings may vary. Any AI-assisted writing or coding should be disclosed in the competition's required submission declaration.
+
+\begin{thebibliography}{10}
+\bibitem{adb} Asian Development Bank, ``Quantum Approaches to Joint-Loss Modelling for Natural Catastrophe Risk,'' \emph{ADB Quantum Innovation Challenge Brief}, 2026.
+\bibitem{glasserman} P. Glasserman, \emph{Monte Carlo Methods in Financial Engineering}. Springer, 2003.
+\bibitem{owen} A. B. Owen, ``Scrambled net variance for integrals of smooth functions,'' \emph{Annals of Statistics}, vol. 25, no. 4, 1997.
+\bibitem{brassard} G. Brassard, P. H\o yer, M. Mosca, and A. Tapp, ``Quantum amplitude amplification and estimation,'' \emph{Contemporary Mathematics}, vol. 305, 2002.
+\bibitem{montanaro} A. Montanaro, ``Quantum speedup of Monte Carlo methods,'' \emph{Proceedings of the Royal Society A}, vol. 471, 2015.
+\bibitem{grinko} D. Grinko, J. Gacon, C. Zoufal, and S. Woerner, ``Iterative quantum amplitude estimation,'' \emph{npj Quantum Information}, vol. 7, 2021.
+\bibitem{chakrabarti} S. Chakrabarti \emph{et al.}, ``A threshold for quantum advantage in derivative pricing,'' \emph{Quantum}, vol. 5, 2021.
+\bibitem{han} Z.-Y. Han \emph{et al.}, ``Unsupervised generative modeling using matrix product states,'' \emph{Physical Review X}, vol. 8, 2018.
+\bibitem{woerner} S. Woerner and D. J. Egger, ``Quantum risk analysis,'' \emph{npj Quantum Information}, vol. 5, 2019.
+\end{thebibliography}
+\end{document}

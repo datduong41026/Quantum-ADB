@@ -1,0 +1,40 @@
+[adb-base] exact rare 3.1633046e-05, Tensor rank 4 theoretical rmse % 0.2037
+  replicates 50 / 200 elapsed 2.5 sec
+  replicates 100 / 200 elapsed 4.9 sec
+  replicates 150 / 200 elapsed 7.5 sec
+  replicates 200 / 200 elapsed 10.0 sec
+[adb-independent] exact rare 3.9239179e-06, Tensor rank 4 theoretical rmse % 0.2449
+  replicates 50 / 200 elapsed 2.5 sec
+  replicates 100 / 200 elapsed 5.0 sec
+  replicates 150 / 200 elapsed 7.4 sec
+  replicates 200 / 200 elapsed 10.0 sec
+[adb-common-shock] exact rare 4.4001542e-05, Tensor rank 4 theoretical rmse % 0.1973
+  replicates 50 / 200 elapsed 2.6 sec
+  replicates 100 / 200 elapsed 5.1 sec
+  replicates 150 / 200 elapsed 7.8 sec
+  replicates 200 / 200 elapsed 10.7 sec
+[adb-rain-stress] exact rare 6.9245657e-05, Tensor rank 4 theoretical rmse % 0.2042
+  replicates 50 / 200 elapsed 2.6 sec
+  replicates 100 / 200 elapsed 5.0 sec
+  replicates 150 / 200 elapsed 7.5 sec
+  replicates 200 / 200 elapsed 10.0 sec
+[adb-rain-cover] exact rare 3.1633046e-05, Tensor rank 4 theoretical rmse % 0.2037
+  replicates 50 / 200 elapsed 2.7 sec
+  replicates 100 / 200 elapsed 5.3 sec
+  replicates 150 / 200 elapsed 7.8 sec
+  replicates 200 / 200 elapsed 10.3 sec
+RARE RMSE:
+method            ADB IS  Heuristic Tail-IS  Monte Carlo  Scrambled Sobol  Stratified  Tensor-Guided IS (r4)
+scenario                                                                                                    
+adb-base           20.66              14.99       107.32           100.07       51.16                   0.20
+adb-common-shock   17.22              12.72        92.31            85.46       42.77                   0.20
+adb-independent    36.85              40.53       232.90           295.38      149.84                   0.24
+adb-rain-cover     16.72              12.56        94.15            96.47       52.32                   0.19
+adb-rain-stress    12.78              10.04        59.00            65.96       39.38                   0.21
+RARE CI:
+        scenario                method           metric  rmse_ratio_vs_adb_is   ci_low  ci_high  bootstrap_p_improvement
+        adb-base Tensor-Guided IS (r4) P_both_exhausted              0.009682 0.008422 0.011204                      1.0
+ adb-independent Tensor-Guided IS (r4) P_both_exhausted              0.006641 0.005576 0.007961                      1.0
+adb-common-shock Tensor-Guided IS (r4) P_both_exhausted              0.011666 0.009941 0.013655                      1.0
+ adb-rain-stress Tensor-Guided IS (r4) P_both_exhausted              0.016694 0.014634 0.019064                      1.0
+  adb-rain-cover Tensor-Guided IS (r4) P_both_exhausted              0.011121 0.009271 0.013492                      1.0

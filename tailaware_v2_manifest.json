@@ -1,0 +1,12 @@
+{
+  "seed_pattern": "202611220+scenario*13000000+replicate*1019+method*110000",
+  "reps": 200,
+  "path_budget": 32768,
+  "tensor_rank": 4,
+  "tail_IS_alpha": 0.9,
+  "h_floor": 0.02,
+  "sobol_scrambles": 8,
+  "bootstrap_reps": 3000,
+  "data": "ADB 7-page Challenge Brief (2026), Tables 1-5",
+  "note": "all methods receive the same target distribution; target-specific tensor proposal uses ADB analytical annual PMF, not exact 3-year truth or held-out outcomes; precomputation favors small benchmark"
+}
